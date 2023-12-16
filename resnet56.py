@@ -3,6 +3,7 @@ import torchvision.transforms as transforms
 import torchvision
 import torch
 import torch.nn as nn
+import numpy as np
 
 
 def _weights_init(m):
@@ -58,7 +59,7 @@ class ResNet(nn.Module):
         self.in_channels = 16
 
         self.conv1 = nn.Conv2d(
-            3, 16, kernel_size=3, stride=1, padding=1, bias=False)
+            6, 16, kernel_size=3, stride=1, padding=1, bias=False)
         self.bn1 = nn.BatchNorm2d(16)
 
         self.layer1 = self._make_layer(block, 16, num_blocks[0], stride=1)
@@ -111,16 +112,58 @@ transform = transforms.Compose([
 # https://github.com/kuangliu/pytorch-cifar/issues/19
 
 # Load CIFAR-10 train, valdation and test sets
-dataset = torchvision.datasets.CIFAR10(
-    root='./data',
-    train=True,
-    download=True,
-    transform=transform)
-testset = torchvision.datasets.CIFAR10(
-    root='./data',
-    train=False,
-    download=True,
-    transform=transform)
+# dataset = torchvision.datasets.CIFAR10(
+#     root='./data',
+#     train=True,
+#     download=True,
+#     transform=transform)
+# testset = torchvision.datasets.CIFAR10(
+#     root='./data',
+#     train=False,
+#     download=True,
+#     transform=transform)
+
+
+class CIFAR10Pair(torchvision.datasets.CIFAR10):
+    def __getitem__(self, index):
+        img, target = super(CIFAR10Pair, self).__getitem__(index)
+
+        # Choose a random index for the anchor image
+        anchor_index = np.random.randint(0, len(self))
+        anchor_img, _ = super(CIFAR10Pair, self).__getitem__(anchor_index)
+
+        # Concatenate the original image and the anchor image along the color channel
+        img_pair = torch.cat((img, anchor_img), dim=0)
+
+        return img_pair, target
+
+
+# Transformations (same as before)
+transform = transforms.Compose([
+    transforms.RandomHorizontalFlip(),
+    transforms.RandomCrop(32, padding=4),
+    transforms.ToTensor(),
+    transforms.Normalize([0.4914, 0.4822, 0.4465], [0.2023, 0.1994, 0.2010]),
+])
+
+# Initialize CIFAR-10 Pair dataset
+dataset = CIFAR10Pair(root='./data', train=True,
+                      download=True, transform=transform)
+dataloader = torch.utils.data.DataLoader(
+    dataset, batch_size=128, shuffle=True, num_workers=2)
+
+# Initialize CIFAR-10 Pair testset
+testset = CIFAR10Pair(root='./data', train=False,
+                      download=True, transform=transform)
+testloader = torch.utils.data.DataLoader(
+    testset, batch_size=128, shuffle=False, num_workers=2)
+
+val_size = 5000  # 10% of dataset
+train_size = len(dataset) - val_size
+
+trainset, validationset = torch.utils.data.random_split(
+    dataset, [train_size, val_size])
+print(len(trainset), len(validationset))
 
 classes = dataset.classes
 class_count = {}
@@ -131,13 +174,6 @@ for _, index in dataset:
         class_count[label] = 0
     class_count[label] += 1
 print(class_count)
-
-val_size = 5000  # 10% of dataset
-train_size = len(dataset) - val_size
-
-trainset, validationset = torch.utils.data.random_split(
-    dataset, [train_size, val_size])
-print(len(trainset), len(validationset))
 
 
 trainloader = torch.utils.data.DataLoader(
