@@ -132,8 +132,11 @@ class CIFAR10Pair(torchvision.datasets.CIFAR10):
         anchor_index = np.random.randint(0, len(self))
         anchor_img, _ = super(CIFAR10Pair, self).__getitem__(anchor_index)
 
-        # Concatenate the original image and the anchor image along the color channel
-        img_pair = torch.cat((img, anchor_img), dim=0)
+        # Calculate the difference between the original image and the anchor
+        img_diff = img - anchor_img
+
+        # Concatenate the anchor image and the diff image
+        img_pair = torch.cat((anchor_img, img_diff), dim=0)
 
         return img_pair, target
 
@@ -214,7 +217,7 @@ optimizer = torch.optim.SGD(
     momentum=momentum,
     weight_decay=weight_decay)
 scheduler = torch.optim.lr_scheduler.MultiStepLR(
-    optimizer, milestones=[100, 150])
+    optimizer, milestones=[70, 120, 170])
 
 for epoch in range(num_epochs):
     for batch_idx, (data, targets) in enumerate(trainloader):
